@@ -3,48 +3,42 @@ import telebot
 from flask import Flask
 from threading import Thread
 
-# Configuración de Flask para que Render crea que es un servicio web
 app = Flask(__name__)
 @app.route('/')
 def home():
     return "Bot activo"
 
-# Configuración del bot
 TOKEN = os.environ.get('TOKEN')
-# Usamos 'threaded=False' para evitar conflictos de concurrencia
 bot = telebot.TeleBot(TOKEN, threaded=False)
-ADMIN_ID = 8747406142
+ADMIN_ID = 8747406142 # Tu ID
 
 @bot.message_handler(func=lambda message: True)
 def filter_messages(message):
-    try:
-        # El admin tiene inmunidad
-        if message.from_user.id != ADMIN_ID:
-            text = message.text.lower()
-            
-            # Lista extensa de detección
-            spam_keywords = [
-                "http", "https", "t.me", ".com", ".net", ".org", ".io", 
-                ".xyz", ".me", ".info", ".biz", "www.", "bit.ly", "tinyurl",
-                ".co", ".gl", ".tk", ".ml", ".club", ".top"
-            ]
-            
-            # Verificación lógica
-            if any(keyword in text for keyword in spam_keywords):
-                bot.delete_message(message.chat.id, message.message_id)
-    except Exception as e:
-        print(f"Error detectado: {e}")
+    # Si el mensaje es tuyo (Admin), no hacemos nada
+    if message.from_user.id == ADMIN_ID:
+        return
 
-# Servidor web en segundo plano
+    text = message.text.lower()
+    
+    # Lista de elementos que el bot borrará automáticamente
+    spam_keywords = ["http", "https", "t.me", ".com", ".net", ".org", "www."]
+    
+    # Comprobamos si el mensaje contiene algo de la lista
+    if any(keyword in text for keyword in spam_keywords):
+        try:
+            bot.delete_message(message.chat.id, message.message_id)
+        except:
+            pass
+
 def run():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 if __name__ == "__main__":
-    # Inicia el hilo web
     Thread(target=run).start()
     
-    # IMPORTANTE: Eliminamos cualquier Webhook antiguo antes de iniciar el polling
+    # PASO CRÍTICO: Limpiar cualquier rastro previo antes de iniciar
     bot.remove_webhook()
     
-    # Iniciamos el polling de forma más conservadora
-    bot.infinity_polling(timeout=20, long_polling_timeout=20)
+    # Usamos infinity_polling con skip_pending=True para ignorar mensajes antiguos
+    # que causan el error 409
+    bot.infinity_polling(skip_pending=True)
